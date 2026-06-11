@@ -6,6 +6,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY bot/ bot/
+COPY README.md ./
 COPY main.py ./
 
 RUN uv pip install --system --no-cache --compile-bytecode .
