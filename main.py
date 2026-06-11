@@ -12,8 +12,7 @@ from bot.handlers.start import router as start_router
 from bot.handlers.photo import register_photo_handler
 from bot.services.gemini_service import GeminiService
 from bot.services.telegram_file_service import TelegramFileService
-from services.iiko_catalog import IikoCatalog
-from services.iiko_server_service import IikoServerService
+
 
 
 def _create_temp_dir(path: Path) -> None:
@@ -21,7 +20,7 @@ def _create_temp_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-async def _init_iiko(catalog: IikoCatalog, service: IikoServerService) -> None:
+async def _init_iiko(catalog, service) -> None:
     """Load iiko catalogs if integration is enabled."""
     if settings.iiko_server and getattr(settings.iiko_server, "enabled", False):
         await service.load_catalog(catalog)
