@@ -22,7 +22,7 @@ def _create_temp_dir(path: Path) -> None:
 
 
 async def _init_iiko(catalog: IikoCatalog, service: IikoServerService) -> None:
-    """Load supplier and product catalogs from iiko server if integration is enabled."""
+    """Load iiko catalogs if integration is enabled."""
     if settings.iiko_server and getattr(settings.iiko_server, "enabled", False):
         await service.load_catalog(catalog)
 
@@ -42,12 +42,13 @@ async def main() -> None:
         temp_dir=settings.temp_dir,
     )
 
-        gemini_service = GeminiService(
-            api_key=settings.llm.api_key,
-            model=settings.llm.model,
-        )
+    # LLM service is always created (required configuration)
+    gemini_service = GeminiService(
+        api_key=settings.llm.api_key,
+        model=settings.llm.model,
+    )
 
-    # iiko services – create only if enabled
+    # iiko services – only when enabled
     iiko_catalog: IikoCatalog | None = None
     iiko_service: IikoServerService | None = None
     if settings.iiko_server and getattr(settings.iiko_server, "enabled", False):
