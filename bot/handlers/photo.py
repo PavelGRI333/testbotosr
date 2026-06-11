@@ -1,3 +1,4 @@
+
 import json
 import uuid
 from pathlib import Path
@@ -54,7 +55,25 @@ class PhotoHandler:
 
     @staticmethod
     def _format_invoice_response(data: InvoiceData) -> str:
-        return f"<pre>{json.dumps(data.model_dump(by_alias=True), indent=2, ensure_ascii=False)}</pre>"
+        # Human‑readable summary as required
+        lines: list[str] = []
+        supplier_line = data.supplier.name
+        if data.supplier.inn:
+            supplier_line += f" (ИНН: {data.supplier.inn})"
+        lines.append(supplier_line)
+        lines.append(f"Номер: {data.document_number} Дата: {data.document_date.isoformat()}")
+        if data.delivery_address:
+            lines.append(f"Адрес доставки: {data.delivery_address}")
+        lines.append("Товары:")
+        for item in data.items:
+            unit = f" {item.unit}" if item.unit else ""
+            price = f"{item.price:.2f}" if item.price is not None else "null"
+            vat = f"{item.vat_sum:.2f}" if item.vat_sum is not None else "null"
+            lines.append(
+                f"- {item.name}: {item.quantity}{unit} × {price} = {item.amount:.2f} (НДС: {vat})"
+            )
+        return "\n".join(lines)
+
 
     @staticmethod
     def _safe_delete(path: Path) -> None:

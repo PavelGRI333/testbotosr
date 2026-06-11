@@ -7,32 +7,7 @@ from google.genai import types
 from bot.core.logger import logger
 from bot.schemas.invoice import InvoiceData
 
-INVOICE_PROMPT = """Ты специалист по обработке накладных и товарных документов. Проанализируй изображение и извлеки данные. Не придумывай значения. Если данные отсутствуют, используй null. Верни только JSON. Не используй markdown. Не добавляй пояснения.
-
-Формат ответа:
-{
-  "supplier": "Контрагент",
-  "delivery_address": "Адрес объекта поставки",
-  "document_number": "Номер документа",
-  "document_date": "Дата документа",
-  "items": [
-    {
-      "name": "Наименование",
-      "quantity": 0,
-      "amount": 0
-    }
-  ]
-}
-
-Требуется извлечь:
-* Контрагент
-* Адрес объекта поставки
-* Номер документа
-* Дата документа
-* Наименование товара
-* Количество
-* Сумма по позиции"""
-
+from bot.core.prompts import INVOICE_SYSTEM_PROMPT  # noqa: E402
 
 class GeminiService:
     def __init__(self, api_key: str, model: str) -> None:
@@ -50,7 +25,7 @@ class GeminiService:
 
         response = await self._client.aio.models.generate_content(
             model=self._model,
-            contents=[image_part, INVOICE_PROMPT],
+            contents=[image_part, INVOICE_SYSTEM_PROMPT],
         )
 
         text = response.text
@@ -65,8 +40,13 @@ class GeminiService:
         except json.JSONDecodeError:
             logger.error("Failed to parse Gemini response as JSON: %s", cleaned)
             raise
+        try:
+            return InvoiceData.model_validate(data)
+        except Exception as exc:
+            # Log full validation error for debugging
+            logger.exception("Invoice data validation error: %s", exc)
+            raise
 
-        return InvoiceData.model_validate(data)
 
     @staticmethod
     def _strip_markdown(text: str) -> str:
