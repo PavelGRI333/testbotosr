@@ -10,6 +10,7 @@ from bot.core.config import settings
 from bot.schemas.invoice import InvoiceData
 from bot.services.gemini_service import GeminiService
 from bot.services.telegram_file_service import TelegramFileService
+from typing import Optional
 from services.iiko_catalog import IikoCatalog
 from services.iiko_server_service import IikoServerService
 
@@ -21,8 +22,8 @@ class PhotoHandler:
         self,
         telegram_file_service: TelegramFileService,
         gemini_service: GeminiService,
-        iiko_catalog: "IikoCatalog",
-        iiko_service: "IikoServerService",
+        iiko_catalog: IikoCatalog | None,
+        iiko_service: IikoServerService | None,
         temp_dir: Path,
     ) -> None:
         self._telegram_file_service = telegram_file_service
@@ -43,43 +44,44 @@ class PhotoHandler:
             try:
                 invoice_data = await self._gemini_service.extract_invoice_data(file_path)
 
-                # Resolve supplier
-                supplier_id = self._iiko_catalog.match_supplier(
-                    inn=invoice_data.supplier.inn,
-                    name=invoice_data.supplier.name,
-                )
-                if not supplier_id:
-                    raise ValueError("Не найден поставщик в справочнике iiko.")
+                # If iiko integration is enabled, resolve and send invoice
+                if settings.iiko_server and getattr(settings.iiko_server, "enabled", False) and self._iiko_catalog and self._iiko_service:
+                    supplier_id = self._iiko_catalog.match_supplier(
+                        inn=invoice_data.supplier.inn,
+                        name=invoice_data.supplier.name,
+                    )
+                    if not supplier_id:
+                        raise ValueError("Не найден поставщик в справочнике iiko.")
+                    store_id = settings.iiko_server.default_store_id
 
-                store_id = settings.iiko_server.default_store_id
+                    resolved: dict[str, str] = {}
+                    problems: list[str] = []
+                    for item in invoice_data.items:
+                        matches = self._iiko_catalog.match_product(item.name)
+                        if not matches:
+                            problems.append(f"Товар '{item.name}' не найден.")
+                            continue
+                        name, score, gid = matches[0]
+                        if score >= 92:
+                            resolved[item.name] = gid
+                        elif score >= 70:
+                            cand_str = ", ".join(f"{m[0]} ({m[1]}%)" for m in matches)
+                            problems.append(f"Неоднозначный товар '{item.name}': {cand_str}")
+                        else:
+                            problems.append(f"Товар '{item.name}' с низким совпадением ({score}%).")
+                    if problems:
+                        raise ValueError("\\n".join(problems))
 
-                # Resolve products
-                resolved: dict[str, str] = {}
-                problems: list[str] = []
-                for item in invoice_data.items:
-                    matches = self._iiko_catalog.match_product(item.name)
-                    if not matches:
-                        problems.append(f"Товар '{item.name}' не найден.")
-                        continue
-                    name, score, gid = matches[0]
-                    if score >= 92:
-                        resolved[item.name] = gid
-                    elif score >= 70:
-                        # ambiguous – list top candidates
-                        cand_str = ", ".join(f"{m[0]} ({m[1]}%)" for m in matches)
-                        problems.append(f"Неоднозначный товар '{item.name}': {cand_str}")
-                    else:
-                        problems.append(f"Товар '{item.name}' с низким совпадением ({score}%).")
-                if problems:
-                    raise ValueError("\n".join(problems))
-
-                ok, result_msg = await self._iiko_service.create_incoming_invoice(
-                    invoice=invoice_data,
-                    supplier_id=supplier_id,
-                    store_id=store_id,
-                    resolved=resolved,
-                )
-                response_text = result_msg if ok else f"Ошибка импорта: {result_msg}"
+                    ok, result_msg = await self._iiko_service.create_incoming_invoice(
+                        invoice=invoice_data,
+                        supplier_id=supplier_id,
+                        store_id=store_id,
+                        resolved=resolved,
+                    )
+                    response_text = result_msg if ok else f"Ошибка импорта: {result_msg}"
+                else:
+                    # iiko disabled – just return parsed invoice
+                    response_text = self._format_invoice_response(invoice_data)
             finally:
                 self._safe_delete(file_path)
 
@@ -112,8 +114,8 @@ def register_photo_handler(
     router: Router,
     telegram_file_service: TelegramFileService,
     gemini_service: GeminiService,
-    iiko_catalog: IikoCatalog,
-    iiko_service: IikoServerService,
+    iiko_catalog: IikoCatalog | None,
+    iiko_service: IikoServerService | None,
     temp_dir: Path,
 ) -> None:
     handler = PhotoHandler(

@@ -22,8 +22,9 @@ def _create_temp_dir(path: Path) -> None:
 
 
 async def _init_iiko(catalog: IikoCatalog, service: IikoServerService) -> None:
-    """Load supplier and product catalogs from iiko server."""
-    await service.load_catalog(catalog)
+    """Load supplier and product catalogs from iiko server if integration is enabled."""
+    if settings.iiko_server and getattr(settings.iiko_server, "enabled", False):
+        await service.load_catalog(catalog)
 
 
 async def main() -> None:
@@ -41,15 +42,18 @@ async def main() -> None:
         temp_dir=settings.temp_dir,
     )
 
-    gemini_service = GeminiService(
-        api_key=settings.gemini.api_key,
-        model=settings.gemini.model,
-    )
+        gemini_service = GeminiService(
+            api_key=settings.llm.api_key,
+            model=settings.llm.model,
+        )
 
-    # iiko services
-    catalog = IikoCatalog(settings.iiko_server.aliases_path)
-    iiko_service = IikoServerService(settings)
-    await _init_iiko(catalog, iiko_service)
+    # iiko services – create only if enabled
+    iiko_catalog: IikoCatalog | None = None
+    iiko_service: IikoServerService | None = None
+    if settings.iiko_server and getattr(settings.iiko_server, "enabled", False):
+        iiko_catalog = IikoCatalog(settings.iiko_server.aliases_path)
+        iiko_service = IikoServerService(settings)
+        await _init_iiko(iiko_catalog, iiko_service)
 
     dispatcher.include_router(start_router)
 
@@ -58,7 +62,7 @@ async def main() -> None:
         router=photo_router,
         telegram_file_service=telegram_file_service,
         gemini_service=gemini_service,
-        iiko_catalog=catalog,
+        iiko_catalog=iiko_catalog,
         iiko_service=iiko_service,
         temp_dir=settings.temp_dir,
     )

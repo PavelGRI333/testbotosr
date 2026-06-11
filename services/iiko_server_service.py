@@ -33,7 +33,7 @@ class IikoServerError(RuntimeError):
 class IikoServerService:
     def __init__(self, settings: Settings, http_client: httpx.AsyncClient | None = None) -> None:
         self._settings = settings
-        self._client = http_client or httpx.AsyncClient(base_url=self._settings.iiko_server.base_url, timeout=30.0)
+        self._client = http_client or httpx.AsyncClient(base_url=self._settings.iiko_server.effective_base_url, timeout=self._settings.iiko_server.timeout)
         self._token: str | None = None
 
     # ---------------------------------------------------------------------
