@@ -13,6 +13,20 @@ class GeminiSettings(BaseSettings):
     model: str = "gemini-2.5-flash"
 
 
+class IikoServerSettings(BaseSettings):
+    host: str
+    login: str
+    password_sha1: str = Field(..., description="SHA1 of password")
+    default_store_id: str
+    default_supplier_id: str | None = None
+    aliases_path: Path = Path("product_aliases.json")
+
+    @property
+    def base_url(self) -> str:
+        """Base URL for iiko RMS API (derived from host)."""
+        return f"https://{self.host}:443/resto/api"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -23,6 +37,7 @@ class Settings(BaseSettings):
 
     bot: BotSettings
     gemini: GeminiSettings
+    iiko_server: IikoServerSettings
     temp_dir: Path = Path("./temp")
 
 
