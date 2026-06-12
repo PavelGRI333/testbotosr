@@ -5,9 +5,9 @@ from google import genai
 from google.genai import types
 
 from bot.core.logger import logger
+from bot.core.prompts import INVOICE_SYSTEM_PROMPT  # noqa: E402
 from bot.schemas.invoice import InvoiceData
 
-from bot.core.prompts import INVOICE_SYSTEM_PROMPT  # noqa: E402
 
 class GeminiService:
     def __init__(self, api_key: str, model: str) -> None:

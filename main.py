@@ -2,13 +2,15 @@ import asyncio
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, Router
-from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.core.config import settings
 from bot.core.logger import logger
-from bot.handlers.start import router as start_router
+from bot.handlers.invoice_edit import router as invoice_edit_router
 from bot.handlers.photo import register_photo_handler
+from bot.handlers.start import router as start_router
 from bot.services.gemini_service import GeminiService
 from bot.services.telegram_file_service import TelegramFileService
 
@@ -25,7 +27,8 @@ def main() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
 
-    dispatcher = Dispatcher()
+    storage = MemoryStorage()
+    dispatcher = Dispatcher(storage=storage)
 
     telegram_file_service = TelegramFileService(
         bot=bot,
@@ -47,6 +50,8 @@ def main() -> None:
         temp_dir=settings.temp_dir,
     )
     dispatcher.include_router(photo_router)
+
+    dispatcher.include_router(invoice_edit_router)
 
     logger.info("Starting bot...")
 
