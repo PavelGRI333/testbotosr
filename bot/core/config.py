@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,9 +8,13 @@ class BotSettings(BaseSettings):
     token: str
 
 
-class GeminiSettings(BaseSettings):
+class LLMSettings(BaseModel):
     api_key: str
-    model: str = "gemini-2.5-flash"
+    model: str = "google/gemini-2.5-pro"
+    base_url: str = "https://openrouter.ai/api/v1"
+    temperature: float = 0.0
+    http_referer: str | None = None
+    app_title: str | None = None
 
 
 class Settings(BaseSettings):
@@ -21,8 +26,8 @@ class Settings(BaseSettings):
     )
 
     bot: BotSettings
-    gemini: GeminiSettings
+    llm: LLMSettings
     temp_dir: Path = Path("./temp")
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

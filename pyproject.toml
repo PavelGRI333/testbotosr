@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "ocr-llm-bot"
 version = "0.1.0"
-description = "Telegram bot for invoice OCR processing via Gemini"
+description = "Telegram bot for invoice OCR processing via LLM"
 authors = []
 readme = "README.md"
 packages = [{include = "bot"}]
@@ -12,7 +12,8 @@ aiogram = "^3.15.0"
 pydantic = "^2.10.0"
 pydantic-settings = "^2.7.0"
 httpx = "^0.28.0"
-google-genai = "^1.5.0"
+openai = "^2.41.1"
+tenacity = "^9.1.4"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.0"

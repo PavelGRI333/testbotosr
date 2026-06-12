@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from aiogram import Bot
+from aiogram.types import PhotoSize
 
 from bot.core.logger import logger
 
@@ -23,5 +24,5 @@ class TelegramFileService:
 
         return destination
 
-    def get_highest_quality_file_id(self, photo_sizes: list) -> str:
+    def get_highest_quality_file_id(self, photo_sizes: list[PhotoSize]) -> str:
         return max(photo_sizes, key=lambda p: p.width * p.height).file_id

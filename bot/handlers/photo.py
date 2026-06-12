@@ -8,7 +8,7 @@ from aiogram.types import Message, PhotoSize
 
 from bot.core.logger import logger
 from bot.handlers.invoice_edit import show_editor
-from bot.services.gemini_service import GeminiService
+from bot.services.llm_service import LLMService
 from bot.services.telegram_file_service import TelegramFileService
 
 router = Router()
@@ -18,11 +18,11 @@ class PhotoHandler:
     def __init__(
         self,
         telegram_file_service: TelegramFileService,
-        gemini_service: GeminiService,
+        llm_service: LLMService,
         temp_dir: Path,
     ) -> None:
         self._telegram_file_service = telegram_file_service
-        self._gemini_service = gemini_service
+        self._llm_service = llm_service
         self._temp_dir = temp_dir
 
     async def handle(self, message: Message, photo_sizes: list[PhotoSize], state: FSMContext) -> None:
@@ -37,7 +37,7 @@ class PhotoHandler:
             await self._telegram_file_service.download_photo(file_id, file_path)
 
             try:
-                invoice_data = await self._gemini_service.extract_invoice_data(file_path)
+                invoice_data = await self._llm_service.extract_invoice_data(file_path)
             finally:
                 self._safe_delete(file_path)
 
@@ -45,7 +45,7 @@ class PhotoHandler:
             await show_editor(message, state, invoice_data)
 
         except json.JSONDecodeError:
-            logger.error("Invalid JSON response from Gemini")
+            logger.error("Invalid JSON response from LLM")
             await processing_msg.edit_text("Ошибка: не удалось распознать данные. Попробуйте ещё раз.")
         except ValueError as exc:
             logger.error("Validation error: %s", exc)
@@ -65,12 +65,12 @@ class PhotoHandler:
 def register_photo_handler(
     router: Router,
     telegram_file_service: TelegramFileService,
-    gemini_service: GeminiService,
+    llm_service: LLMService,
     temp_dir: Path,
 ) -> None:
     handler = PhotoHandler(
         telegram_file_service=telegram_file_service,
-        gemini_service=gemini_service,
+        llm_service=llm_service,
         temp_dir=temp_dir,
     )
 
