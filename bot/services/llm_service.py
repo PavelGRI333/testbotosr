@@ -51,7 +51,7 @@ class LLMService:
             "Content-Type": "application/json",
         }
 
-    def _pdf_pages_to_images(self, pdf_path: Path, max_pages: int = 3) -> list[Path]:
+    def _pdf_pages_to_images(self, pdf_path: Path, max_pages: int = 2) -> list[Path]:
         """Конвертирует первые max_pages страниц PDF в JPEG и возвращает список временных файлов."""
         doc = fitz.open(pdf_path)
         total_pages = min(len(doc), max_pages)
@@ -87,7 +87,7 @@ class LLMService:
 
         # Если это PDF – конвертируем страницы в изображения
         if mime_type == "application/pdf":
-            image_paths = self._pdf_pages_to_images(path, max_pages=3)
+            image_paths = self._pdf_pages_to_images(path, max_pages=2)
             actual_mime = "image/jpeg"
         else:
             image_paths = [path]
