@@ -10,7 +10,7 @@ class BotSettings(BaseSettings):
 
 class LLMSettings(BaseModel):
     api_key: str
-    model: str = "google/gemini-2.5-pro"
+    model: str = "google/gemini-3.1-flash-lite"
     base_url: str = "https://openrouter.ai/api/v1"
     temperature: float = 0.0
     http_referer: str | None = None

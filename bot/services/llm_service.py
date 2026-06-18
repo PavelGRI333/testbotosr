@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import re
-import base64
 import json
 import logging
-import mimetypes
+import re
 from pathlib import Path
 
-from openai import AsyncOpenAI
+import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from bot.core.config import LLMSettings
@@ -22,25 +20,18 @@ _USER_PROMPT = "Распознай накладную на изображени�
 def _strip_fences(text: str) -> str:
     """Извлекает JSON из ответа LLM, удаляя Markdown-обрамление и лишний текст."""
     text = text.strip()
-    # Если ответ обёрнут в ```json ... ```, извлекаем содержимое
     if text.startswith("```") and text.endswith("```"):
-        # Удаляем обрамление: берём всё между первой и последней тройкой бэктиков
-        # Находим позицию первого ``` и последнего ```
         first = text.find("```")
         last = text.rfind("```")
         if first != -1 and last != -1 and last > first:
-            # Берём содержимое после первого ``` до последнего ```
-            inner = text[first+3:last].strip()
-            # Удаляем возможный язык (json) после первой строки
+            inner = text[first + 3:last].strip()
             lines = inner.splitlines()
             if lines and lines[0].strip().lower() == "json":
                 inner = "\n".join(lines[1:]).strip()
             return inner
-    # Если нет обрамления, пробуем найти JSON-объект или массив
-    match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
+    match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
     if match:
         return match.group(1).strip()
-    # Иначе возвращаем как есть
     return text
 
 
@@ -48,16 +39,13 @@ class LLMService:
     def __init__(self, settings: LLMSettings) -> None:
         self._model = settings.model
         self._temperature = settings.temperature
-        headers: dict[str, str] = {}
-        if settings.http_referer:
-            headers["HTTP-Referer"] = settings.http_referer
-        if settings.app_title:
-            headers["X-Title"] = settings.app_title
-        self._client = AsyncOpenAI(
-            api_key=settings.api_key,
-            base_url=settings.base_url,
-            default_headers=headers or None,
-        )
+        self._base_url = settings.base_url.rstrip("/")
+        self._api_key = settings.api_key
+        self._headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "HTTP-Referer": settings.http_referer or "https://your-bot-domain.com",
+            "X-Title": settings.app_title or "Invoice Bot",
+        }
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -68,47 +56,66 @@ class LLMService:
     async def extract_invoice_data(
         self,
         file_path: str | Path,
-        mime_type: str = "image/jpeg",
+        mime_type: str = "application/pdf",
     ) -> InvoiceData:
-        """Send a file to the LLM and parse the JSON invoice data.
-
-        ``file_path`` – path to the locally saved file (image or PDF).
-        ``mime_type`` – MIME type to embed in the data URL; defaults to
-        ``image/jpeg`` for backward compatibility.
+        """
+        Отправляет файл (PDF или изображение) в OpenRouter через multipart/form-data.
+        Параметр mime_type по умолчанию application/pdf, но может быть переопределён.
         """
         path = Path(file_path)
-        # Use provided mime_type directly; fallback to guess only if not supplied
-        mime = mime_type or mimetypes.guess_type(path.name)[0] or "image/jpeg"
-        b64 = base64.b64encode(path.read_bytes()).decode("ascii")
-        data_url = f"data:{mime};base64,{b64}"
+        file_bytes = path.read_bytes()
+        logger.info("Processing file: %s, size: %.2f KB", path.name, len(file_bytes) / 1024)
 
-        response = await self._client.chat.completions.create(
-            model=self._model,
-            temperature=self._temperature,
-            response_format={"type": "json_object"},
-            messages=[
+        # Подготовка multipart-данных
+        files = {
+            "file": (path.name, file_bytes, mime_type),
+        }
+
+        # Тело запроса (JSON-параметры)
+        payload = {
+            "model": self._model,
+            "temperature": self._temperature,
+            "response_format": {"type": "json_object"},
+            "messages": [
                 {"role": "system", "content": INVOICE_SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": _USER_PROMPT},
-                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {
+                            "type": "file",
+                            "file": {
+                                "name": path.name,
+                                "mime_type": mime_type,
+                            },
+                        },
                     ],
                 },
             ],
-        )
+        }
 
-        raw = response.choices[0].message.content or ""
-        logger.debug("LLM raw response: %s", raw)
+        # Отправка multipart-запроса
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{self._base_url}/chat/completions",
+                files=files,
+                data={"data": json.dumps(payload)},  # OpenRouter требует поле data с JSON
+                headers=self._headers,
+            )
+            response.raise_for_status()
+            result = response.json()
+            raw = result["choices"][0]["message"]["content"] or ""
+            logger.debug("LLM raw response: %s", raw)
 
-        try:
-            data = json.loads(_strip_fences(raw))
-        except json.JSONDecodeError:
-            logger.error("Failed to parse LLM response as JSON: %s", raw)
-            raise
+            clean = _strip_fences(raw)
+            try:
+                parsed = json.loads(clean)
+            except json.JSONDecodeError:
+                logger.error("Failed to parse LLM response as JSON: %s", raw)
+                raise
 
-        try:
-            return InvoiceData.model_validate(data)
-        except Exception as exc:
-            logger.exception("Invoice data validation error: %s", exc)
-            raise
+            try:
+                return InvoiceData.model_validate(parsed)
+            except Exception as exc:
+                logger.exception("Invoice data validation error: %s", exc)
+                raise
