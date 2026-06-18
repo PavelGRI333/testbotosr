@@ -89,7 +89,7 @@ class LLMService:
                             "file": {
                                 "name": path.name,
                                 "mime_type": mime_type,
-                                "data": data_url,  # base64-encoded data URL
+                                "file_data": data_url,  # base64-encoded data URL
                             },
                         },
                     ],
