@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import base64
 from pathlib import Path
 
 import httpx
@@ -45,6 +46,7 @@ class LLMService:
             "Authorization": f"Bearer {self._api_key}",
             "HTTP-Referer": settings.http_referer or "https://your-bot-domain.com",
             "X-Title": settings.app_title or "Invoice Bot",
+            "Content-Type": "application/json",
         }
 
     @retry(
@@ -59,19 +61,19 @@ class LLMService:
         mime_type: str = "application/pdf",
     ) -> InvoiceData:
         """
-        Отправляет файл (PDF или изображение) в OpenRouter через multipart/form-data.
-        Параметр mime_type по умолчанию application/pdf, но может быть переопределён.
+        Отправляет файл (PDF или изображение) в OpenRouter через base64 в JSON.
         """
         path = Path(file_path)
-        file_bytes = path.read_bytes()
-        logger.info("Processing file: %s, size: %.2f KB", path.name, len(file_bytes) / 1024)
+        file_size = path.stat().st_size
+        logger.info("Processing file: %s, size: %.2f KB", path.name, file_size / 1024)
 
-        # Подготовка multipart-данных
-        files = {
-            "file": (path.name, file_bytes, mime_type),
-        }
+        # Кодируем файл в base64
+        with open(path, "rb") as f:
+            b64_content = base64.b64encode(f.read()).decode("ascii")
 
-        # Тело запроса (JSON-параметры)
+        data_url = f"data:{mime_type};base64,{b64_content}"
+
+        # Формируем payload для OpenRouter
         payload = {
             "model": self._model,
             "temperature": self._temperature,
@@ -83,10 +85,11 @@ class LLMService:
                     "content": [
                         {"type": "text", "text": _USER_PROMPT},
                         {
-                            "type": "file",
+                            "type": "file",  # OpenRouter поддерживает тип "file" для PDF
                             "file": {
                                 "name": path.name,
                                 "mime_type": mime_type,
+                                "data": data_url,  # base64-encoded data URL
                             },
                         },
                     ],
@@ -94,14 +97,16 @@ class LLMService:
             ],
         }
 
-        # Отправка multipart-запроса
+        # Отправляем JSON-запрос
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{self._base_url}/chat/completions",
-                files=files,
-                data={"data": json.dumps(payload)},  # OpenRouter требует поле data с JSON
+                json=payload,
                 headers=self._headers,
             )
+            # Логируем ошибку подробно
+            if response.status_code != 200:
+                logger.error("OpenRouter error: %s", response.text)
             response.raise_for_status()
             result = response.json()
             raw = result["choices"][0]["message"]["content"] or ""
