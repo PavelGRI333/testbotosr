@@ -4,12 +4,20 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
+# Установка системных зависимостей для сборки numpy/scipy (если понадобится)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gfortran \
+    libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml ./
 COPY bot/ bot/
 COPY README.md ./
 COPY main.py ./
 
-RUN uv pip install --system --no-cache --compile-bytecode .
+# Убираем --compile-bytecode, чтобы избежать таймаута
+RUN uv pip install --system --no-cache .
 
 
 FROM python:3.12-slim
