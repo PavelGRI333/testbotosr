@@ -9,7 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot.core.config import settings
 from bot.core.logger import logger
 from bot.handlers.invoice_edit import router as invoice_edit_router
-from bot.handlers.photo import register_photo_handler
+from bot.handlers.document import register_document_handler
 from bot.handlers.start import router as start_router
 from bot.services.llm_service import LLMService
 from bot.services.telegram_file_service import TelegramFileService
@@ -39,14 +39,14 @@ def main() -> None:
 
     dispatcher.include_router(start_router)
 
-    photo_router = Router()
-    register_photo_handler(
-        router=photo_router,
+    document_router = Router()
+    register_document_handler(
+        router=document_router,
         telegram_file_service=telegram_file_service,
         llm_service=llm_service,
         temp_dir=settings.temp_dir,
     )
-    dispatcher.include_router(photo_router)
+    dispatcher.include_router(document_router)
 
     dispatcher.include_router(invoice_edit_router)
 

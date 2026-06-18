@@ -49,9 +49,20 @@ class LLMService:
         wait=wait_exponential(min=1, max=10),
         reraise=True,
     )
-    async def extract_invoice_data(self, image_path: str | Path) -> InvoiceData:
-        path = Path(image_path)
-        mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
+    async def extract_invoice_data(
+        self,
+        file_path: str | Path,
+        mime_type: str = "image/jpeg",
+    ) -> InvoiceData:
+        """Send a file to the LLM and parse the JSON invoice data.
+
+        ``file_path`` – path to the locally saved file (image or PDF).
+        ``mime_type`` – MIME type to embed in the data URL; defaults to
+        ``image/jpeg`` for backward compatibility.
+        """
+        path = Path(file_path)
+        # Use provided mime_type directly; fallback to guess only if not supplied
+        mime = mime_type or mimetypes.guess_type(path.name)[0] or "image/jpeg"
         b64 = base64.b64encode(path.read_bytes()).decode("ascii")
         data_url = f"data:{mime};base64,{b64}"
 
