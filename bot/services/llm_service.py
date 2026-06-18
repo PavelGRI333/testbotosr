@@ -51,21 +51,18 @@ class LLMService:
             "Content-Type": "application/json",
         }
 
-    def _pdf_pages_to_images(self, pdf_path: Path, max_pages: int = 4) -> list[Path]:
-        """
-        Конвертирует первые max_pages страниц PDF в JPEG и возвращает список временных файлов.
-        Если в PDF меньше страниц, конвертирует все имеющиеся.
-        """
+    def _pdf_pages_to_images(self, pdf_path: Path, max_pages: int = 3) -> list[Path]:
+        """Конвертирует первые max_pages страниц PDF в JPEG и возвращает список временных файлов."""
         doc = fitz.open(pdf_path)
         total_pages = min(len(doc), max_pages)
         images = []
         for i in range(total_pages):
             page = doc[i]
-            pix = page.get_pixmap(dpi=300)  # высокое разрешение для точности
-            temp_jpeg = Path(tempfile.mkstemp(suffix=f"_page{i+1}.jpg", prefix="pdf_")[1])
+            pix = page.get_pixmap(dpi=200)  # снизили с 300 до 200
+            temp_jpeg = Path(tempfile.mkstemp(suffix=f"_page{i + 1}.jpg", prefix="pdf_")[1])
             pix.save(temp_jpeg, "jpeg")
             images.append(temp_jpeg)
-            logger.info("Converted page %d to JPEG: %s", i+1, temp_jpeg)
+            logger.info("Converted page %d to JPEG: %s", i + 1, temp_jpeg)
         doc.close()
         return images
 
@@ -90,7 +87,7 @@ class LLMService:
 
         # Если это PDF – конвертируем страницы в изображения
         if mime_type == "application/pdf":
-            image_paths = self._pdf_pages_to_images(path, max_pages=4)
+            image_paths = self._pdf_pages_to_images(path, max_pages=3)
             actual_mime = "image/jpeg"
         else:
             image_paths = [path]
