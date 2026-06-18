@@ -9,8 +9,11 @@ COPY bot/ bot/
 COPY README.md ./
 COPY main.py ./
 
-RUN uv pip install --system --no-cache --compile-bytecode .
+# Устанавливаем все зависимости
+RUN uv pip install --system .
 
+# Переустанавливаем PyMuPDF (на случай, если установился старый fitz)
+RUN uv pip install --system --force-reinstall PyMuPDF
 
 FROM python:3.12-slim
 
