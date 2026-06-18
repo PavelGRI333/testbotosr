@@ -17,7 +17,7 @@ from bot.schemas.invoice import InvoiceData
 
 logger = logging.getLogger(__name__)
 
-_USER_PROMPT = "Распознай накладную на изображении и верни JSON."
+_USER_PROMPT = "Распознай накладную на изображении и верни JSON. Используй ТОЛЬКО первое изображение для списка товаров. Адрес и поставщика ищи на любой странице."
 
 
 def _strip_fences(text: str) -> str:
