@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 import httpx
-import fitz  # PyMuPDF
+import fitz
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from bot.core.config import LLMSettings
@@ -51,17 +51,23 @@ class LLMService:
             "Content-Type": "application/json",
         }
 
-    def _pdf_first_page_to_jpeg(self, pdf_path: Path) -> Path:
-        """Конвертирует первую страницу PDF в JPEG и возвращает путь к временному файлу."""
+    def _pdf_pages_to_images(self, pdf_path: Path, max_pages: int = 4) -> list[Path]:
+        """
+        Конвертирует первые max_pages страниц PDF в JPEG и возвращает список временных файлов.
+        Если в PDF меньше страниц, конвертирует все имеющиеся.
+        """
         doc = fitz.open(pdf_path)
-        page = doc[0]  # первая страница
-        pix = page.get_pixmap(dpi=300)  # увеличиваем разрешение для лучшего распознавания
-        # Сохраняем во временный файл
-        temp_jpeg = Path(tempfile.mkstemp(suffix=".jpg", prefix="page_")[1])
-        pix.save(temp_jpeg, "jpeg")
+        total_pages = min(len(doc), max_pages)
+        images = []
+        for i in range(total_pages):
+            page = doc[i]
+            pix = page.get_pixmap(dpi=300)  # высокое разрешение для точности
+            temp_jpeg = Path(tempfile.mkstemp(suffix=f"_page{i+1}.jpg", prefix="pdf_")[1])
+            pix.save(temp_jpeg, "jpeg")
+            images.append(temp_jpeg)
+            logger.info("Converted page %d to JPEG: %s", i+1, temp_jpeg)
         doc.close()
-        logger.info("Converted first page of PDF to JPEG: %s", temp_jpeg)
-        return temp_jpeg
+        return images
 
     @retry(
         retry=retry_if_exception_type(Exception),
@@ -76,36 +82,27 @@ class LLMService:
     ) -> InvoiceData:
         """
         Отправляет файл в OpenRouter.
-        Если это PDF, то конвертирует первую страницу в JPEG и отправляет как изображение.
+        Если это PDF, конвертирует первые 4 страницы в JPEG и отправляет как несколько изображений.
         """
         path = Path(file_path)
         file_size = path.stat().st_size
         logger.info("Processing file: %s, size: %.2f KB", path.name, file_size / 1024)
 
-        # Если это PDF – конвертируем первую страницу в JPEG
+        # Если это PDF – конвертируем страницы в изображения
         if mime_type == "application/pdf":
-            image_path = self._pdf_first_page_to_jpeg(path)
-            # теперь работаем с изображением
+            image_paths = self._pdf_pages_to_images(path, max_pages=4)
             actual_mime = "image/jpeg"
-            actual_path = image_path
         else:
+            image_paths = [path]
             actual_mime = mime_type
-            actual_path = path
 
-        # Кодируем изображение в base64
-        with open(actual_path, "rb") as f:
-            b64_content = base64.b64encode(f.read()).decode("ascii")
-        data_url = f"data:{actual_mime};base64,{b64_content}"
-
-        # Если это было изображение, отправляем как image_url, чтобы модель лучше понимала
-        # Для OpenRouter лучше использовать тип "image_url" для изображений
-        content_parts = [
-            {"type": "text", "text": _USER_PROMPT},
-            {
-                "type": "image_url",
-                "image_url": {"url": data_url},
-            },
-        ]
+        # Собираем контент: сначала текст, затем все изображения
+        content_parts = [{"type": "text", "text": _USER_PROMPT}]
+        for img_path in image_paths:
+            with open(img_path, "rb") as f:
+                b64_content = base64.b64encode(f.read()).decode("ascii")
+            data_url = f"data:{actual_mime};base64,{b64_content}"
+            content_parts.append({"type": "image_url", "image_url": {"url": data_url}})
 
         payload = {
             "model": self._model,
@@ -143,7 +140,9 @@ class LLMService:
                 logger.exception("Invoice data validation error: %s", exc)
                 raise
             finally:
-                # Удаляем временный JPEG, если он был создан
-                if mime_type == "application/pdf" and actual_path.exists():
-                    actual_path.unlink(missing_ok=True)
-                    logger.debug("Deleted temporary image: %s", actual_path)
+                # Удаляем все временные JPEG-файлы, если они были созданы для PDF
+                if mime_type == "application/pdf":
+                    for img_path in image_paths:
+                        if img_path.exists():
+                            img_path.unlink(missing_ok=True)
+                            logger.debug("Deleted temporary image: %s", img_path)
