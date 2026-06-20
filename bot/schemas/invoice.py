@@ -31,6 +31,7 @@ class Supplier(BaseModel):
 
 
 class InvoiceItem(BaseModel):
+    article: str | None = None
     name: str
     quantity: Decimal | None = None
     unit: str | None = None
@@ -38,6 +39,16 @@ class InvoiceItem(BaseModel):
     amount: Decimal | None = None
     vat_rate: Decimal | None = None
     vat_sum: Decimal | None = None
+
+    @field_validator("article", mode="before")
+    @classmethod
+    def _clean_article(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if s.lower() in {"", "-", "—", "–", "null", "none", "n/a", "нет"}:
+            return None
+        return s
 
     @field_validator("quantity", "price", "amount", "vat_rate", "vat_sum", mode="before")
     @classmethod
@@ -55,6 +66,7 @@ class InvoiceItem(BaseModel):
     @property
     def needs_review(self) -> bool:
         return self.amount is None or self.quantity is None or self.price is None
+
 
 
 class InvoiceData(BaseModel):

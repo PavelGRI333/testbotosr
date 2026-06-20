@@ -66,7 +66,7 @@ class LLMService:
         images = []
         for i in range(total_pages):
             page = doc[i]
-            pix = page.get_pixmap(dpi=200)  # снизили с 300 до 200
+            pix = page.get_pixmap(dpi=300)  # снизили с 300 до 200
             temp_jpeg = Path(tempfile.mkstemp(suffix=f"_page{i + 1}.jpg", prefix="pdf_")[1])
             pix.save(temp_jpeg, "jpeg")
             images.append(temp_jpeg)
