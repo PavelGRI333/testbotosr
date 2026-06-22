@@ -13,7 +13,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from bot.core.config import LLMSettings
 from bot.core.prompts import INVOICE_SYSTEM_PROMPT
-from bot.schemas.invoice import InvoiceData, SimpleInvoiceData
+from bot.schemas.invoice import InvoiceData
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ class LLMService:
                 raise
 
             try:
-                return SimpleInvoiceData.model_validate(parsed)
+                return InvoiceData.model_validate(parsed)
             except Exception as exc:
                 logger.exception("Invoice data validation error: %s", exc)
                 raise
