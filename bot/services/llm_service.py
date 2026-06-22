@@ -110,6 +110,9 @@ class LLMService:
                 {"role": "user", "content": content_parts},
             ],
         }
+        logger.info("SYSTEM PROMPT:\n%s", INVOICE_SYSTEM_PROMPT)
+        logger.info("USER PROMPT:\n%s", _USER_PROMPT)
+        logger.info("Payload: model=%s, parts=%d", self._model, len(content_parts))
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
