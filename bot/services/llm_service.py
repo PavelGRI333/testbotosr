@@ -13,11 +13,11 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from bot.core.config import LLMSettings
 from bot.core.prompts import INVOICE_SYSTEM_PROMPT
-from bot.schemas.invoice import InvoiceData
+from bot.schemas.invoice import InvoiceData, SimpleInvoiceData
 
 logger = logging.getLogger(__name__)
 
-_USER_PROMPT = "Распознай накладную на изображении и верни JSON. Используй ТОЛЬКО первое изображение для списка товаров. Адрес и поставщика ищи на любой странице."
+_USER_PROMPT = "Распознай накладную на изображении и верни JSON"
 
 
 def _strip_fences(text: str) -> str:
@@ -135,7 +135,7 @@ class LLMService:
                 raise
 
             try:
-                return InvoiceData.model_validate(parsed)
+                return SimpleInvoiceData.model_validate(parsed)
             except Exception as exc:
                 logger.exception("Invoice data validation error: %s", exc)
                 raise

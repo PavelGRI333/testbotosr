@@ -5,6 +5,9 @@ from decimal import Decimal, InvalidOperation
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from typing import Optional
+
+
 
 def _to_decimal(v: object) -> Decimal | None:
     if v is None or isinstance(v, Decimal):
@@ -110,5 +113,79 @@ class InvoiceData(BaseModel):
     @property
     def needs_review(self) -> bool:
         return any(i.needs_review for i in self.items)
+
+    model_config = {"populate_by_name": True}
+
+
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional
+
+class SimpleInvoiceItem(BaseModel):
+    article: Optional[str] = Field(default=None, alias="Артикул")
+    name: str = Field(..., alias="Наименование")
+    quantity: Decimal | None = Field(default=None, alias="Количество")
+    price: Decimal | None = Field(default=None, alias="Цена")
+
+    @field_validator("quantity", "price", mode="before")
+    @classmethod
+    def _clean_decimal(cls, v):
+        return _to_decimal(v)
+
+class SimpleInvoiceData(BaseModel):
+    supplier_name: str = Field(..., alias="Поставщик")
+    supplier_inn: str = Field(default="", alias="ИНН")
+    document_number: str = Field(..., alias="Номер")
+    document_date: date | None = Field(default=None, alias="Дата")
+    delivery_address: Optional[str] = Field(default=None, alias="АдресПоставки")
+    buyer: Optional[str] = Field(default=None, alias="Покупатель")
+    items: list[SimpleInvoiceItem] = Field(..., alias="Товары")
+
+    # ... валидаторы даты и всё остальное как выше
+
+    @field_validator("document_date", mode="before")
+    @classmethod
+    def parse_date(cls, v):
+        # Используем ту же логику, что и в InvoiceData (можно вынести в общую функцию)
+        if v is None:
+            return None
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            s = v.strip()
+            if s.lower() in {"", "null", "none", "n/a"}:
+                return None
+            # Пробуем ISO
+            try:
+                return datetime.fromisoformat(s).date()
+            except ValueError:
+                pass
+            # Пробуем русскую дату с месяцем словами
+            s_clean = s.replace("г.", "").strip()
+            parts = s_clean.split()
+            if len(parts) >= 3:
+                day = parts[0]
+                month_str = parts[1].lower()
+                year = parts[2]
+                month_map = {
+                    "января": "01", "февраля": "02", "марта": "03", "апреля": "04",
+                    "мая": "05", "июня": "06", "июля": "07", "августа": "08",
+                    "сентября": "09", "октября": "10", "ноября": "11", "декабря": "12",
+                    "янв": "01", "фев": "02", "мар": "03", "апр": "04",
+                    "май": "05", "июн": "06", "июл": "07", "авг": "08",
+                    "сен": "09", "окт": "10", "ноя": "11", "дек": "12",
+                }
+                month = month_map.get(month_str)
+                if month:
+                    try:
+                        return date(int(year), int(month), int(day))
+                    except ValueError:
+                        pass
+            # Пробуем dd.mm.yyyy
+            try:
+                return datetime.strptime(s, "%d.%m.%Y").date()
+            except ValueError:
+                pass
+            return None
+        return None
 
     model_config = {"populate_by_name": True}
