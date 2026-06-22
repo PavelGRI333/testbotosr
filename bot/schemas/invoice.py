@@ -140,8 +140,16 @@ class SimpleInvoiceData(BaseModel):
     buyer: Optional[str] = Field(default=None, alias="Покупатель")
     items: list[SimpleInvoiceItem] = Field(..., alias="Товары")
 
-    # ... валидаторы даты и всё остальное как выше
+    # Преобразуем None -> "" для обязательных строковых полей, если LLM вернула null
+    @field_validator("supplier_inn", mode="before")
+    @classmethod
+    def empty_str_for_none(cls, v):
+        return v if v is not None else ""
 
+    @field_validator("document_number", mode="before")
+    @classmethod
+    def empty_str_for_none_doc(cls, v):
+        return v if v is not None else ""
     @field_validator("document_date", mode="before")
     @classmethod
     def parse_date(cls, v):
